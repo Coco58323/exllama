@@ -337,17 +337,17 @@ class QParams:
 
 qparams_attn = [
     [
-        QParams(4096, [4], [1], 5),
-        QParams(4096, [4], [1], 5),
-        QParams(4096, [4], [1], 5),
-        QParams(4096, [4], [1], 5),
+        QParams(128, [5], [1], 8),
+        QParams(128, [5], [1], 8),
+        QParams(128, [5], [1], 8),
+        QParams(128, [5], [1], 8),
     ]
 ]
 qparams_mlp = [
     [
-        QParams(4096, [4], [1], 5),
-        QParams(4096, [4], [1], 5),
-        QParams(4096, [4], [1], 5),
+        QParams(128, [5], [1], 8),
+        QParams(128, [5], [1], 8),
+        QParams(128, [5], [1], 8),
     ]
 ]
 

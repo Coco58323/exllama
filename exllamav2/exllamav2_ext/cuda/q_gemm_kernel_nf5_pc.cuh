@@ -146,6 +146,7 @@ typedef void (*fp_gemm_half_q_half_kernel)
     const half*,
     const int
 );
+__device__ static float nf5_data[32] = {-1.0000, -0.8258, -0.7103, -0.6203, -0.5448, -0.4786, -0.4190, -0.3640,-0.3126, -0.2638, -0.2171, -0.1720, -0.1281, -0.0849, -0.0423,  0.0000,0.0397,  0.0796,  0.1199,  0.1609,  0.2029,  0.2461,  0.2910,  0.3379,0.3876,  0.4407,  0.4985,  0.5626,  0.6358,  0.7230,  0.8344,  1.0000};
 
 template <int m_count, int kernel_p, bool use_r_weights, bool mul_r_weights, int block_kn_size>
 __global__ void gemm_half_q_half_kernel
@@ -176,6 +177,10 @@ __global__ void gemm_half_q_half_kernel
     MatrixView_half_rw c_(c, size_m, size_n);
 
     int t = threadIdx.x;
+    __shared__ half quant_data[32];
+    for (int i = 0; i < 32; i++) {
+        quant_data[i] = __float2half(nf5_data[i]);
+    }
 
     // Block
 
@@ -288,10 +293,10 @@ __global__ void gemm_half_q_half_kernel
             load_int4[4] = *((int4*) b_ptr); b_ptr += size_n;
 
             half2 dq[4][16];
-            dequant_5bit_32(load_int4[0].x, load_int4[1].x, load_int4[2].x, load_int4[3].x, load_int4[4].x, dq[0], size_n);
-            dequant_5bit_32(load_int4[0].y, load_int4[1].y, load_int4[2].y, load_int4[3].y, load_int4[4].y, dq[1], size_n);
-            dequant_5bit_32(load_int4[0].z, load_int4[1].z, load_int4[2].z, load_int4[3].z, load_int4[4].z, dq[2], size_n);
-            dequant_5bit_32(load_int4[0].w, load_int4[1].w, load_int4[2].w, load_int4[3].w, load_int4[4].w, dq[3], size_n);
+            dequant_5bit_32(load_int4[0].x, load_int4[1].x, load_int4[2].x, load_int4[3].x, load_int4[4].x, dq[0], size_n, quant_data);
+            dequant_5bit_32(load_int4[0].y, load_int4[1].y, load_int4[2].y, load_int4[3].y, load_int4[4].y, dq[1], size_n, quant_data);
+            dequant_5bit_32(load_int4[0].z, load_int4[1].z, load_int4[2].z, load_int4[3].z, load_int4[4].z, dq[2], size_n, quant_data);
+            dequant_5bit_32(load_int4[0].w, load_int4[1].w, load_int4[2].w, load_int4[3].w, load_int4[4].w, dq[3], size_n, quant_data);
 
             for (int m = 0; m < m_count_min; m++)
             {
@@ -325,8 +330,6 @@ __global__ void gemm_half_q_half_kernel
 
         atomicAdd(out    , result01);
         atomicAdd(out + 1, result23);
-//        *out = result01;
-//        *(out + 1) = result23;
     }
 }
 

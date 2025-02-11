@@ -175,8 +175,8 @@ __forceinline__ __device__ void dequant_5bit_32
     }
     for (int i = 0; i < 16; i++) {
         half2_uint32 sign = qq[4] & 0xf800f800;
-        dq[i] = resultq[i].as_half2;
-        // dq[i] = __hmul2(sign.as_half2, resultq[i].as_half2);
+        // dq[i] = resultq[i].as_half2
+        dq[i] = __hmul2(sign.as_half2, resultq[i].as_half2);
         qq[4] <<= 1;
     }
 }

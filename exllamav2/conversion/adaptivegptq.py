@@ -36,6 +36,7 @@ class AdaptiveQuantizer:
         self.scale_bits = scale_bits
         self.maxq = 2 ** bits - 1
         self.qzero = (self.maxq + 1) / 2
+        # self.qzero = 0
         self.scale_maxq = 2 ** scale_bits - 1
 
         self.scale_maxq = (2 ** self.scale_bits) - 1

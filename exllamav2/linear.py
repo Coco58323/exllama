@@ -10,7 +10,7 @@ from exllamav2.tensor_p import BROADCAST_VC
 from exllamav2.util import unpack_4bit, pack_4bit
 import gc
 from exllamav2.experimental.fpx import fpxify
-
+import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -357,8 +357,11 @@ class ExLlamaV2Linear(ExLlamaV2Module):
             output_shape = hidden_states.shape[:-1] + (self.out_features,)
             hidden_states = hidden_states.view(-1, hidden_states.shape[-1])
             output = torch.empty((hidden_states.shape[0], self.out_features), dtype = torch.half, device = self.device())
+            # print('before gemm')
+            # start = time.time()
             ext_c.gemm_half_q_half(hidden_states, self.q_handle, output, force_cuda)
-
+            # end = time.time()
+            # print('after gemm', end - start)
             hidden_states_out = output.view(output_shape)
 
         else:

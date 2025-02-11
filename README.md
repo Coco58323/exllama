@@ -124,6 +124,9 @@ To install the current dev version, clone the repo and run the setup script:
 ```sh
 git clone https://github.com/turboderp/exllamav2
 cd exllamav2
+cd /home/kesong.yk/anaconda3/envs/decdiff_env/bin/../lib/
+mv libstdc++.so.6 libstdc++.so.6.old
+ln -s /usr/lib/x86_64-linux-gnu/libstdc++.so.6 libstdc++.so.6
 pip install -r requirements.txt
 pip install .
 ```

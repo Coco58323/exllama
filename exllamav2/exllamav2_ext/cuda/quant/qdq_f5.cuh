@@ -4,6 +4,8 @@
 #include "qdq_util.cuh"
 #include "../../config.h"
 
+#if QMODE_5BIT == 1
+
 // Permutation:
 // 77775555 33331111  66664444 22220000
 // ffffdddd bbbb9999  eeeecccc aaaa8888
@@ -11,7 +13,7 @@
 // vvvvtttt rrrrpppp  uuuussss qqqqoooo
 // 02468ace gikmoqsu  13579bdfh jlnprtv
 
-__forceinline__ __device__ void shuffle_5bit_32
+__forceinline__ __device__ void shuffle_f5bit_32
 (
     uint32_t* q,
     int stride
@@ -143,7 +145,7 @@ __forceinline__ __device__ void shuffle_5bit_32
     q[4 * stride] = ze;
 }
 
-__forceinline__ __device__ void dequant_5bit_32
+__forceinline__ __device__ void dequant_f5bit_32
 (
     const uint32_t q_0,
     const uint32_t q_1,
@@ -159,26 +161,65 @@ __forceinline__ __device__ void dequant_5bit_32
     // ppppnnnn lllljjjj  oooommmm kkkkiiii
     // xxxxvvvv ttttrrrr  wwwwuuuu ssssqqqq
     // 0248ace gikmoqsuw  1357bdfh jlnprtvx
-    uint32_t qq[5] = {q_0, q_1, q_2, q_3, q_4};
+    uint32_t* qq[5] = {q_0, q_1, q_2, q_3, q_4};
     half2_uint32 resultq[16];
     for (int i = 0; i < 4; i++) {
-        half2_uint32 qq0 ((qq[i] & 0x000f000f) << 7); // (q[ 0], q[ 1])
-        half2_uint32 qq1 ((qq[i] & 0x00f000f0) << 3); // (q[ 2], q[ 3]) 
+        uint32_t q0 = (qq[i] & 0x000f000f); // short2_int32(q[ 0], q[ 1])
+        q0 <<= 7;
+        uint32_t q1 = (qq[i] & 0x00f000f0); // short2_int32(q[ 2], q[ 3]) 
+        q1 <<= 3;
         qq[i] >>= 1;
-        half2_uint32 qq2 ((qq[i] & 0x07800780)); // (q[ 4], q[ 5])     
+        uint32_t q2 = (qq[i] & 0x07800780); // short2_int32(q[ 4], q[ 5])     
         qq[i] >>= 4;
-        half2_uint32 qq3 ((qq[i] & 0x07800780)); // (q[ 6], q[ 7])
-        resultq[i * 4].as_uint32 = qq0.as_uint32;
-        resultq[i * 4 + 1].as_uint32 = qq1.as_uint32;
-        resultq[i * 4 + 2].as_uint32 = qq2.as_uint32;
-        resultq[i * 4 + 3].as_uint32 = qq3.as_uint32;
+        uint32_t q3 = (qq[i] & 0x07800780); // short2_int32(q[ 6], q[ 7])
+        resultq[i * 4] = q0;
+        resultq[i * 4 + 1] = q1;
+        resultq[i * 4 + 2] = q2;
+        resultq[i * 4 + 3] = q3;
     }
-    for (int i = 0; i < 16; i++) {
-        half2_uint32 sign = qq[4] & 0xf800f800;
-        dq[i] = resultq[i].as_half2;
-        // dq[i] = __hmul2(sign.as_half2, resultq[i].as_half2);
-        qq[4] <<= 1;
+    half2_uint32* sign[32];
+    for (int i = 0; i < 32; i++) {
+        half2_uint32 sign = qq[5] & 0xf800f800;
+        dq[i] = __hfma2(sign.as_half2, q[i].as_half2);
+        qq[5] <<= 1;
     }
 }
+
+#else
+
+__forceinline__ __device__ void shuffle_5bit_32
+(
+    uint32_t* q,
+    int stride
+)
+{
+}
+
+__forceinline__ __device__ void dequant_5bit_32
+(
+    const uint32_t q_0,
+    const uint32_t q_1,
+    const uint32_t q_2,
+    const uint32_t q_3,
+    const uint32_t q_4,
+    half2 (&dq)[16],
+    int stride
+)
+{
+    half dqh[32];
+    for (int i = 0; i <  6; i++) dqh[     i] = dq_ns(exb(     q_0, i * 5    , 0x1f), 16);
+                                 dqh[ 6    ] = dq_ns(exb(q_1, q_0,        30, 0x1f), 16);
+    for (int i = 0; i <  5; i++) dqh[ 7 + i] = dq_ns(exb(     q_1, i * 5 + 3, 0x1f), 16);
+                                 dqh[12    ] = dq_ns(exb(q_2, q_1,        28, 0x1f), 16);
+    for (int i = 0; i <  6; i++) dqh[13 + i] = dq_ns(exb(     q_2, i * 5 + 1, 0x1f), 16);
+                                 dqh[19    ] = dq_ns(exb(q_3, q_2,        31, 0x1f), 16);
+    for (int i = 0; i <  5; i++) dqh[20 + i] = dq_ns(exb(     q_3, i * 5 + 4, 0x1f), 16);
+                                 dqh[25    ] = dq_ns(exb(q_4, q_3,        29, 0x1f), 16);
+    for (int i = 0; i <  6; i++) dqh[26 + i] = dq_ns(exb(     q_4, i * 5 + 2, 0x1f), 16);
+
+    for (int i = 0; i < 16; i++) dq[i] = __halves2half2(dqh[i * 2], dqh[i * 2 + 1]);
+}
+
+#endif
 
 #endif
