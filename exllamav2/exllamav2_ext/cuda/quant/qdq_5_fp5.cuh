@@ -1,6 +1,6 @@
 #ifndef _qdq_5_cuh
 #define _qdq_5_cuh
-
+#include <stdio.h>
 #include "qdq_util.cuh"
 #include "../../config.h"
 
@@ -90,43 +90,43 @@ __forceinline__ __device__ void shuffle_5bit_32
     uint32_t qqu = qf & 0x0000000f;
     uint32_t qqv = (qf>>5) & 0x0000000f;
 
-    uint32_t s0 = (qa >> 4) & 0x00000001;
-    uint32_t s1 = (qa >> 9) & 0x00000001;
-    uint32_t s2 = (qa >> 14) & 0x00000001;
-    uint32_t s3 = (qa >> 19) & 0x00000001;
-    uint32_t s4 = (qa >> 24) & 0x00000001;
-    uint32_t s5 = (qa >> 29) & 0x00000001;
+    // uint32_t s0 = (qa >> 4) & 0x00000001;
+    // uint32_t s1 = (qa >> 9) & 0x00000001;
+    // uint32_t s2 = (qa >> 14) & 0x00000001;
+    // uint32_t s3 = (qa >> 19) & 0x00000001;
+    // uint32_t s4 = (qa >> 24) & 0x00000001;
+    // uint32_t s5 = (qa >> 29) & 0x00000001;
 
-    uint32_t s6 = (qb >> 4) & 0x00000001;
-    uint32_t s7 = (qb >> 9) & 0x00000001;
-    uint32_t s8 = (qb >> 14) & 0x00000001;
-    uint32_t s9 = (qb >> 19) & 0x00000001;
-    uint32_t sa = (qb >> 24) & 0x00000001;
-    uint32_t sb = (qb >> 29) & 0x00000001;
+    // uint32_t s6 = (qb >> 4) & 0x00000001;
+    // uint32_t s7 = (qb >> 9) & 0x00000001;
+    // uint32_t s8 = (qb >> 14) & 0x00000001;
+    // uint32_t s9 = (qb >> 19) & 0x00000001;
+    // uint32_t sa = (qb >> 24) & 0x00000001;
+    // uint32_t sb = (qb >> 29) & 0x00000001;
 
-    uint32_t sc = (qc >> 4) & 0x00000001;
-    uint32_t sd = (qc >> 9) & 0x00000001;
-    uint32_t se = (qc >> 14) & 0x00000001;
-    uint32_t sf = (qc >> 19) & 0x00000001;
-    uint32_t sg = (qc >> 24) & 0x00000001;
-    uint32_t sh = (qc >> 29) & 0x00000001;
+    // uint32_t sc = (qc >> 4) & 0x00000001;
+    // uint32_t sd = (qc >> 9) & 0x00000001;
+    // uint32_t se = (qc >> 14) & 0x00000001;
+    // uint32_t sf = (qc >> 19) & 0x00000001;
+    // uint32_t sg = (qc >> 24) & 0x00000001;
+    // uint32_t sh = (qc >> 29) & 0x00000001;
 
-    uint32_t si = (qd >> 4) & 0x00000001;
-    uint32_t sj = (qd >> 9) & 0x00000001;
-    uint32_t sk = (qd >> 14) & 0x00000001;
-    uint32_t sl = (qd >> 19) & 0x00000001;
-    uint32_t sm = (qd >> 24) & 0x00000001;
-    uint32_t sn = (qd >> 29) & 0x00000001;
+    // uint32_t si = (qd >> 4) & 0x00000001;
+    // uint32_t sj = (qd >> 9) & 0x00000001;
+    // uint32_t sk = (qd >> 14) & 0x00000001;
+    // uint32_t sl = (qd >> 19) & 0x00000001;
+    // uint32_t sm = (qd >> 24) & 0x00000001;
+    // uint32_t sn = (qd >> 29) & 0x00000001;
 
-    uint32_t so = (qe >> 4) & 0x00000001;
-    uint32_t sp = (qe >> 9) & 0x00000001;
-    uint32_t sq = (qe >> 14) & 0x00000001;
-    uint32_t sr = (qe >> 19) & 0x00000001;
-    uint32_t ss = (qe >> 24) & 0x00000001;
-    uint32_t st = (qe >> 29) & 0x00000001;
+    // uint32_t so = (qe >> 4) & 0x00000001;
+    // uint32_t sp = (qe >> 9) & 0x00000001;
+    // uint32_t sq = (qe >> 14) & 0x00000001;
+    // uint32_t sr = (qe >> 19) & 0x00000001;
+    // uint32_t ss = (qe >> 24) & 0x00000001;
+    // uint32_t st = (qe >> 29) & 0x00000001;
 
-    uint32_t su = (qf >> 4) & 0x00000001;
-    uint32_t sv = (qf >> 9) & 0x00000001;
+    // uint32_t su = (qf >> 4) & 0x00000001;
+    // uint32_t sv = (qf >> 9) & 0x00000001;
 
 
     za = qq0 | (qq2<<4) | (qq4<<8) | (qq6<<12) | (qq1<<16) | (qq3<<20) | (qq5<<24) | (qq7<<28);
@@ -159,25 +159,26 @@ __forceinline__ __device__ void dequant_5bit_32
     // ppppnnnn lllljjjj  oooommmm kkkkiiii
     // xxxxvvvv ttttrrrr  wwwwuuuu ssssqqqq
     // 0248ace gikmoqsuw  1357bdfh jlnprtvx
-    uint32_t qq[5] = {q_0, q_1, q_2, q_3, q_4};
-    half2_uint32 resultq[16];
-    for (int i = 0; i < 4; i++) {
-        half2_uint32 qq0 ((qq[i] & 0x000f000f) << 7); // (q[ 0], q[ 1])
-        half2_uint32 qq1 ((qq[i] & 0x00f000f0) << 3); // (q[ 2], q[ 3]) 
-        qq[i] >>= 1;
-        half2_uint32 qq2 ((qq[i] & 0x07800780)); // (q[ 4], q[ 5])     
-        qq[i] >>= 4;
-        half2_uint32 qq3 ((qq[i] & 0x07800780)); // (q[ 6], q[ 7])
-        resultq[i * 4].as_uint32 = qq0.as_uint32;
-        resultq[i * 4 + 1].as_uint32 = qq1.as_uint32;
-        resultq[i * 4 + 2].as_uint32 = qq2.as_uint32;
-        resultq[i * 4 + 3].as_uint32 = qq3.as_uint32;
-    }
+    // uint32_t qq[5] = {q_0, q_1, q_2, q_3, q_4};
+    // half2_uint32 resultq[16];
+    // for (int i = 0; i < 4; i++) {
+    //     half2_uint32 qq0 ((qq[i] & 0x000f000f) << 7); // (q[ 0], q[ 1])
+    //     half2_uint32 qq1 ((qq[i] & 0x00f000f0) << 3); // (q[ 2], q[ 3]) 
+    //     qq[i] >>= 1;
+    //     half2_uint32 qq2 ((qq[i] & 0x07800780)); // (q[ 4], q[ 5])     
+    //     qq[i] >>= 4;
+    //     half2_uint32 qq3 ((qq[i] & 0x07800780)); // (q[ 6], q[ 7])
+    //     resultq[i * 4].as_uint32 = qq0.as_uint32;
+    //     resultq[i * 4 + 1].as_uint32 = qq1.as_uint32;
+    //     resultq[i * 4 + 2].as_uint32 = qq2.as_uint32;
+    //     resultq[i * 4 + 3].as_uint32 = qq3.as_uint32;
+    // }
     for (int i = 0; i < 16; i++) {
-        half2_uint32 sign = qq[4] & 0xf800f800;
+        half2_uint32 sign (q_4 & 0xf800f800);
+        half2_uint32 qq ((q_0 & 0x000f000f) << 7);
         // dq[i] = resultq[i].as_half2
-        dq[i] = __hmul2(sign.as_half2, resultq[i].as_half2);
-        qq[4] <<= 1;
+        dq[i] = __hmul2(sign.as_half2, qq.as_half2);
+        q_4 <<= 1;
     }
 }
 

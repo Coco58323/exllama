@@ -49,7 +49,7 @@ def make_q_group(input_features, pack_size):
         q_groups.append(i * unit_size)
     return torch.tensor(q_groups, dtype=torch.int16).cuda()
 
-def kernel_latency(m,n,k,bit=4,kernel=None, warmup_times=4, run_times=10, fast_flush=False):
+def kernel_latency(m,n,k,bit=5,kernel=None, warmup_times=3, run_times=10, fast_flush=False):
     q_weight = torch.randint(0, 2**16, ((k//32)*bit, n), dtype=torch.int32).cuda()
     q_scale = torch.randint(0, 2**16, (k//128, n//8), dtype=torch.int32).cuda()
     # q_perm = torch.arange(0, 4096, dtype=torch.int32).cuda()
@@ -106,13 +106,17 @@ shapes = [
             # [8, 4096*4, 4096*2],
             # [8, 4096*2, 4096],
             # [1, 4096*4, 4096*2],
-            # [1, 4096*2, 4096],
             [32, 8192, 22016],
             [16, 8192, 22016],
             [8, 8192, 22016],
             [4, 8192, 22016],
             [2, 8192, 22016],
             [1, 8192, 22016],
+            # [1, 4096, 4096],
+            # [1, 4096*2, 4096],
+            # [1, 4096*4, 4096],
+            # [1, 4096*4, 4096*4],
+            # [1, 4096*2, 4096*4]
 ]
 
 # batch = 4

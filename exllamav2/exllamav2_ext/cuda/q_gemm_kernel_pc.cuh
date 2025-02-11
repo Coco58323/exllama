@@ -241,8 +241,6 @@ __global__ void gemm_half_q_half_kernel
 
     // Find initial group
 
-    //int group = offset_k / groupsize;
-    int group = b_q_group_map[offset_k * 2];
 
 //    if (offset_m == 0 && t == 0)
 //        DBGI2(offset_k, group);

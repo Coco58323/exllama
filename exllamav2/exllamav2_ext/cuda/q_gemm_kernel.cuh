@@ -112,16 +112,6 @@ __forceinline__ __device__ half dot22_32_h(half2(&dq)[16], const half* a_ptr, co
     return __hfma(result_h, qs_h, g_result);
 }
 
-__forceinline__ __device__ half dot22_32_pc(half2(&dq)[16], const half* a_ptr, const half g_result)
-{
-    half2 result = {};
-    const half2* a2_ptr = (const half2*)a_ptr;
-    #pragma unroll
-    for (int i = 0; i < 16; i += 1) result = __hfma2(dq[i], *a2_ptr++, result);
-    half result_h = __hadd(__low2half(result), __high2half(result));
-    return __hadd(result_h, g_result);
-}
-
 
 typedef void (*fp_gemm_half_q_half_kernel)
 (
@@ -174,6 +164,7 @@ __global__ void gemm_half_q_half_kernel
 {
     MatrixView_half a_(a, size_m, size_k);
     MatrixView_half_rw c_(c, size_m, size_n);
+    MatrixView_q4_row b_q_scale_(b_q_scale, groups, size_n);
 
     int t = threadIdx.x;
 
@@ -247,6 +238,28 @@ __global__ void gemm_half_q_half_kernel
 //    if (offset_m == 0 && t == 0)
 //        DBGI2(offset_k, group);
 
+    // Preload scales
+
+    half scales[block_kn_size / 32][4];
+
+    //int groups_in_block = DIVIDE((end_k - offset_k), groupsize);
+    int temp_k = offset_k;
+    for (int g = 0; temp_k < end_k; g++)
+    {
+        int qscales[4];
+        b_q_scale_.item4(qscales, group + g, n);
+        qscales[0]++;
+        qscales[1]++;
+        qscales[2]++;
+        qscales[3]++;
+        half maxscale = b_q_scale_max[group + g];
+        scales[g][0] = __hmul(__int2half_rn(qscales[0] * qscales[0]), maxscale);
+        scales[g][1] = __hmul(__int2half_rn(qscales[1] * qscales[1]), maxscale);
+        scales[g][2] = __hmul(__int2half_rn(qscales[2] * qscales[2]), maxscale);
+        scales[g][3] = __hmul(__int2half_rn(qscales[3] * qscales[3]), maxscale);
+        temp_k += b_q_group_map[temp_k * 2 + 1];
+    }
+
     // a, b offset
 
     int pre_rows_8 = min(rows_8, offset_k);
@@ -267,6 +280,15 @@ __global__ void gemm_half_q_half_kernel
     const half* a_ptr = &block_a[0][0];
     int a_stride = block_kn_size;
 
+    // Initial group
+
+    int scales_idx = 0;
+    half qs_h0 = scales[scales_idx][0];
+    half qs_h1 = scales[scales_idx][1];
+    half qs_h2 = scales[scales_idx][2];
+    half qs_h3 = scales[scales_idx][3];
+    int nextgroup = offset_k + b_q_group_map[offset_k * 2 + 1];
+
     // Column result
 
     half block_c[m_count][4] = {};
@@ -274,9 +296,102 @@ __global__ void gemm_half_q_half_kernel
     // Dequantize groups
 
     int k = offset_k;
+
+    if constexpr (kernel_p & 0b10000000) {
+    while (k < rows_8 && k < end_k)
+    {
+        if (k == nextgroup)
+        {
+            group++;
+            scales_idx++;
+            qs_h0 = scales[scales_idx][0];
+            qs_h1 = scales[scales_idx][1];
+            qs_h2 = scales[scales_idx][2];
+            qs_h3 = scales[scales_idx][3];
+            nextgroup += b_q_group_map[k * 2 + 1];
+        }
+
+        #pragma unroll
+        for (int j = 0; j < 4; j++)
+        {
+            int4 load_int4[2];
+            load_int4[0] = *((int4*) b_ptr); b_ptr += size_n;
+            load_int4[1] = *((int4*) b_ptr); b_ptr += size_n;
+
+            half2 dq[4][4];
+            dequant_8bit_8(load_int4[0].x, load_int4[1].x, dq[0], size_n);
+            dequant_8bit_8(load_int4[0].y, load_int4[1].y, dq[1], size_n);
+            dequant_8bit_8(load_int4[0].z, load_int4[1].z, dq[2], size_n);
+            dequant_8bit_8(load_int4[0].w, load_int4[1].w, dq[3], size_n);
+
+            for (int m = 0; m < m_count_min; m++)
+            {
+                if constexpr (use_r_weights) { if (!weights[m].as_uint16) continue; }
+                block_c[m][0] = dot22_8_h(dq[0], a_ptr + m * a_stride, block_c[m][0], qs_h0);
+                block_c[m][1] = dot22_8_h(dq[1], a_ptr + m * a_stride, block_c[m][1], qs_h1);
+                block_c[m][2] = dot22_8_h(dq[2], a_ptr + m * a_stride, block_c[m][2], qs_h2);
+                block_c[m][3] = dot22_8_h(dq[3], a_ptr + m * a_stride, block_c[m][3], qs_h3);
+            }
+            a_ptr += 8;
+        }
+        k += 32;
+    }}
+
+    if constexpr (kernel_p & 0b00100000) {
+    while (k < rows_6 && k < end_k)
+    {
+        if (k == nextgroup)
+        {
+            group++;
+            scales_idx++;
+            qs_h0 = scales[scales_idx][0];
+            qs_h1 = scales[scales_idx][1];
+            qs_h2 = scales[scales_idx][2];
+            qs_h3 = scales[scales_idx][3];
+            nextgroup += b_q_group_map[k * 2 + 1];
+        }
+
+        #pragma unroll
+        for (int j = 0; j < 2; j++)
+        {
+            int4 load_int4[3];
+            load_int4[0] = *((int4*) b_ptr); b_ptr += size_n;
+            load_int4[1] = *((int4*) b_ptr); b_ptr += size_n;
+            load_int4[2] = *((int4*) b_ptr); b_ptr += size_n;
+
+            half2 dq[4][8];
+            dequant_6bit_16(load_int4[0].x, load_int4[1].x, load_int4[2].x, dq[0], size_n);
+            dequant_6bit_16(load_int4[0].y, load_int4[1].y, load_int4[2].y, dq[1], size_n);
+            dequant_6bit_16(load_int4[0].z, load_int4[1].z, load_int4[2].z, dq[2], size_n);
+            dequant_6bit_16(load_int4[0].w, load_int4[1].w, load_int4[2].w, dq[3], size_n);
+
+            for (int m = 0; m < m_count_min; m++)
+            {
+                if constexpr (use_r_weights) { if (!weights[m].as_uint16) continue; }
+                block_c[m][0] = dot22_16_h(dq[0], a_ptr + m * a_stride, block_c[m][0], qs_h0);
+                block_c[m][1] = dot22_16_h(dq[1], a_ptr + m * a_stride, block_c[m][1], qs_h1);
+                block_c[m][2] = dot22_16_h(dq[2], a_ptr + m * a_stride, block_c[m][2], qs_h2);
+                block_c[m][3] = dot22_16_h(dq[3], a_ptr + m * a_stride, block_c[m][3], qs_h3);
+            }
+            a_ptr += 16;
+        }
+        k += 32;
+    }}
+
     if constexpr (kernel_p & 0b00010000) {
     while (k < rows_5 && k < end_k)
     {
+        if (k == nextgroup)
+        {
+            group++;
+            scales_idx++;
+            qs_h0 = scales[scales_idx][0];
+            qs_h1 = scales[scales_idx][1];
+            qs_h2 = scales[scales_idx][2];
+            qs_h3 = scales[scales_idx][3];
+            nextgroup += b_q_group_map[k * 2 + 1];
+        }
+
         #pragma unroll
         for (int j = 0; j < 1; j++)
         {
@@ -296,10 +411,10 @@ __global__ void gemm_half_q_half_kernel
             for (int m = 0; m < m_count_min; m++)
             {
                 if constexpr (use_r_weights) { if (!weights[m].as_uint16) continue; }
-                block_c[m][0] = dot22_32_pc(dq[0], a_ptr + m * a_stride, block_c[m][0]);
-                block_c[m][1] = dot22_32_pc(dq[1], a_ptr + m * a_stride, block_c[m][1]);
-                block_c[m][2] = dot22_32_pc(dq[2], a_ptr + m * a_stride, block_c[m][2]);
-                block_c[m][3] = dot22_32_pc(dq[3], a_ptr + m * a_stride, block_c[m][3]);
+                block_c[m][0] = dot22_32_h(dq[0], a_ptr + m * a_stride, block_c[m][0], qs_h0);
+                block_c[m][1] = dot22_32_h(dq[1], a_ptr + m * a_stride, block_c[m][1], qs_h1);
+                block_c[m][2] = dot22_32_h(dq[2], a_ptr + m * a_stride, block_c[m][2], qs_h2);
+                block_c[m][3] = dot22_32_h(dq[3], a_ptr + m * a_stride, block_c[m][3], qs_h3);
             }
             a_ptr += 32;
         }
@@ -307,6 +422,125 @@ __global__ void gemm_half_q_half_kernel
         k += 32;
     }}
 
+    if constexpr (kernel_p & 0b00001000) {
+    while (k < rows_4 && k < end_k)
+    {
+        if (k == nextgroup)
+        {
+            group++;
+            scales_idx++;
+            qs_h0 = scales[scales_idx][0];
+            qs_h1 = scales[scales_idx][1];
+            qs_h2 = scales[scales_idx][2];
+            qs_h3 = scales[scales_idx][3];
+            nextgroup += b_q_group_map[k * 2 + 1];
+        }
+
+        #pragma unroll
+        for (int j = 0; j < 4; j++)
+        {
+            int4 load_int4[1];
+            load_int4[0] = *((int4*) b_ptr); b_ptr += size_n;
+
+            half2 dq[4][4];
+            dequant_4bit_8(load_int4[0].x, dq[0], size_n);
+            dequant_4bit_8(load_int4[0].y, dq[1], size_n);
+            dequant_4bit_8(load_int4[0].z, dq[2], size_n);
+            dequant_4bit_8(load_int4[0].w, dq[3], size_n);
+
+            for (int m = 0; m < m_count_min; m++)
+            {
+                if constexpr (use_r_weights) { if (!weights[m].as_uint16) continue; }
+                block_c[m][0] = dot22_8_h(dq[0], a_ptr + m * a_stride, block_c[m][0], qs_h0);
+                block_c[m][1] = dot22_8_h(dq[1], a_ptr + m * a_stride, block_c[m][1], qs_h1);
+                block_c[m][2] = dot22_8_h(dq[2], a_ptr + m * a_stride, block_c[m][2], qs_h2);
+                block_c[m][3] = dot22_8_h(dq[3], a_ptr + m * a_stride, block_c[m][3], qs_h3);
+            }
+            a_ptr += 8;
+        }
+        k += 32;
+    }}
+
+    if constexpr (kernel_p & 0b00000100) {
+    while (k < rows_3 && k < end_k)
+    {
+        if (k == nextgroup)
+        {
+            group++;
+            scales_idx++;
+            qs_h0 = scales[scales_idx][0];
+            qs_h1 = scales[scales_idx][1];
+            qs_h2 = scales[scales_idx][2];
+            qs_h3 = scales[scales_idx][3];
+            nextgroup += b_q_group_map[k * 2 + 1];
+        }
+
+        #pragma unroll
+        for (int j = 0; j < 1; j++)
+        {
+            int4 load_int4[3];
+            load_int4[0] = *((int4*) b_ptr); b_ptr += size_n;
+            load_int4[1] = *((int4*) b_ptr); b_ptr += size_n;
+            load_int4[2] = *((int4*) b_ptr); b_ptr += size_n;
+
+            half2 dq[4][16];
+            dequant_3bit_32(load_int4[0].x, load_int4[1].x, load_int4[2].x, dq[0], size_n);
+            dequant_3bit_32(load_int4[0].y, load_int4[1].y, load_int4[2].y, dq[1], size_n);
+            dequant_3bit_32(load_int4[0].z, load_int4[1].z, load_int4[2].z, dq[2], size_n);
+            dequant_3bit_32(load_int4[0].w, load_int4[1].w, load_int4[2].w, dq[3], size_n);
+
+            for (int m = 0; m < m_count_min; m++)
+            {
+                if constexpr (use_r_weights) { if (!weights[m].as_uint16) continue; }
+                block_c[m][0] = dot22_32_h(dq[0], a_ptr + m * a_stride, block_c[m][0], qs_h0);
+                block_c[m][1] = dot22_32_h(dq[1], a_ptr + m * a_stride, block_c[m][1], qs_h1);
+                block_c[m][2] = dot22_32_h(dq[2], a_ptr + m * a_stride, block_c[m][2], qs_h2);
+                block_c[m][3] = dot22_32_h(dq[3], a_ptr + m * a_stride, block_c[m][3], qs_h3);
+            }
+            a_ptr += 32;
+        }
+        k += 32;
+    }}
+
+    if constexpr (kernel_p & 0b00000010) {
+    while (k < rows_2 && k < end_k)
+    {
+        if (k == nextgroup)
+        {
+            group++;
+            scales_idx++;
+            qs_h0 = scales[scales_idx][0];
+            qs_h1 = scales[scales_idx][1];
+            qs_h2 = scales[scales_idx][2];
+            qs_h3 = scales[scales_idx][3];
+            nextgroup += b_q_group_map[k * 2 + 1];
+        }
+
+        #pragma unroll
+        for (int j = 0; j < 1; j++)
+        {
+            int4 load_int4[1];
+            load_int4[0] = *((int4*) b_ptr); b_ptr += size_n;
+
+            half2 dq[4][8];
+            dequant_2bit_16(load_int4[0].x, dq[0], size_n);
+            dequant_2bit_16(load_int4[0].y, dq[1], size_n);
+            dequant_2bit_16(load_int4[0].z, dq[2], size_n);
+            dequant_2bit_16(load_int4[0].w, dq[3], size_n);
+
+            for (int m = 0; m < m_count_min; m++)
+            {
+                if constexpr (use_r_weights) { if (!weights[m].as_uint16) continue; }
+                block_c[m][0] = dot22_16_h(dq[0], a_ptr + m * a_stride, block_c[m][0], qs_h0);
+                block_c[m][1] = dot22_16_h(dq[1], a_ptr + m * a_stride, block_c[m][1], qs_h1);
+                block_c[m][2] = dot22_16_h(dq[2], a_ptr + m * a_stride, block_c[m][2], qs_h2);
+                block_c[m][3] = dot22_16_h(dq[3], a_ptr + m * a_stride, block_c[m][3], qs_h3);
+            }
+
+            a_ptr += 16;
+        }
+        k += 16;
+    }}
 
     // Accumulate column sums in c
 
