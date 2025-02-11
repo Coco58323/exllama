@@ -162,24 +162,63 @@ __forceinline__ __device__ void dequant_5bit_32
     // uint32_t qq[5] = {q_0, q_1, q_2, q_3, q_4};
     // half2_uint32 resultq[16];
     // for (int i = 0; i < 4; i++) {
-    //     half2_uint32 qq0 ((qq[i] & 0x000f000f) << 7); // (q[ 0], q[ 1])
-    //     half2_uint32 qq1 ((qq[i] & 0x00f000f0) << 3); // (q[ 2], q[ 3]) 
-    //     qq[i] >>= 1;
-    //     half2_uint32 qq2 ((qq[i] & 0x07800780)); // (q[ 4], q[ 5])     
-    //     qq[i] >>= 4;
-    //     half2_uint32 qq3 ((qq[i] & 0x07800780)); // (q[ 6], q[ 7])
     //     resultq[i * 4].as_uint32 = qq0.as_uint32;
     //     resultq[i * 4 + 1].as_uint32 = qq1.as_uint32;
     //     resultq[i * 4 + 2].as_uint32 = qq2.as_uint32;
     //     resultq[i * 4 + 3].as_uint32 = qq3.as_uint32;
     // }
-    for (int i = 0; i < 16; i++) {
-        half2_uint32 sign (q_4 & 0xf800f800);
-        half2_uint32 qq ((q_0 & 0x000f000f) << 7);
-        // dq[i] = resultq[i].as_half2
-        dq[i] = __hmul2(sign.as_half2, qq.as_half2);
-        q_4 <<= 1;
-    }
+    half2_uint32 qq0 ((q_0 & 0x000f000f) << 8); // (q[ 0], q[ 1])
+    half2_uint32 qq1 ((q_0 & 0x00f000f0) << 4); // (q[ 2], q[ 3]) 
+    half2_uint32 qq2 ((q_0 & 0x0f000f00)); // (q[ 2], q[ 3]) 
+    half2_uint32 qq3 ((q_0 & 0xf000f000) >> 4); // (q[ 2], q[ 3]) 
+    half2_uint32 qq4 ((q_1 & 0x000f000f) << 8); // (q[ 0], q[ 1])
+    half2_uint32 qq5 ((q_1 & 0x00f000f0) << 4); // (q[ 2], q[ 3]) 
+    half2_uint32 qq6 ((q_1 & 0x0f000f00)); // (q[ 2], q[ 3]) 
+    half2_uint32 qq7 ((q_1 & 0xf000f000) >> 4); // (q[ 2], q[ 3]) 
+    half2_uint32 qq8 ((q_2 & 0x000f000f) << 8); // (q[ 0], q[ 1])
+    half2_uint32 qq9 ((q_2 & 0x00f000f0) << 4); // (q[ 2], q[ 3]) 
+    half2_uint32 qq10 ((q_2 & 0x0f000f00)); // (q[ 2], q[ 3]) 
+    half2_uint32 qq11 ((q_2 & 0xf000f000) >> 4); // (q[ 2], q[ 3]) 
+    half2_uint32 qq12 ((q_3 & 0x000f000f) << 8); // (q[ 0], q[ 1])
+    half2_uint32 qq13 ((q_3 & 0x00f000f0) << 4); // (q[ 2], q[ 3]) 
+    half2_uint32 qq14 ((q_3 & 0x0f000f00)); // (q[ 2], q[ 3]) 
+    half2_uint32 qq15 ((q_3 & 0xf000f000) >> 4); // (q[ 2], q[ 3]) 
+
+    half2_uint32 sign0 (((q_4 << 0) & 0xf800f800) | 0x3c003c00);
+    dq[0] =  __hmul2(sign0.as_half2, qq0.as_half2);
+    half2_uint32 sign1 (((q_4 << 1) & 0xf800f800) | 0x3c003c00);
+    dq[1] =  __hmul2(sign1.as_half2, qq1.as_half2);
+    half2_uint32 sign2 (((q_4 << 2) & 0xf800f800) | 0x3c003c00);
+    dq[2] =  __hmul2(sign2.as_half2, qq2.as_half2);
+    half2_uint32 sign3 (((q_4 << 3) & 0xf800f800) | 0x3c003c00);
+    dq[3] =  __hmul2(sign3.as_half2, qq3.as_half2);
+    half2_uint32 sign4 (((q_4 << 4) & 0xf800f800) | 0x3c003c00);
+    dq[4] =  __hmul2(sign4.as_half2, qq4.as_half2);
+    half2_uint32 sign5 (((q_4 << 5) & 0xf800f800) | 0x3c003c00);
+    dq[5] =  __hmul2(sign5.as_half2, qq5.as_half2);
+    half2_uint32 sign6 (((q_4 << 6) & 0xf800f800) | 0x3c003c00);
+    dq[6] =  __hmul2(sign6.as_half2, qq6.as_half2);
+    half2_uint32 sign7 (((q_4 << 7) & 0xf800f800) | 0x3c003c00);
+    dq[7] =  __hmul2(sign7.as_half2, qq7.as_half2);
+    half2_uint32 sign8 (((q_4 << 8) & 0xf800f800) | 0x3c003c00);
+    dq[8] =  __hmul2(sign8.as_half2, qq8.as_half2);
+    half2_uint32 sign9 (((q_4 << 9) & 0xf800f800) | 0x3c003c00);
+    dq[9] =  __hmul2(sign9.as_half2, qq9.as_half2);
+    half2_uint32 sign10 (((q_4 << 10) & 0xf800f800) | 0x3c003c00);
+    dq[10] =  __hmul2(sign10.as_half2, qq10.as_half2);
+    half2_uint32 sign11 (((q_4 << 11) & 0xf800f800) | 0x3c003c00);
+    dq[11] =  __hmul2(sign11.as_half2, qq11.as_half2);
+    half2_uint32 sign12 (((q_4 << 12) & 0xf800f800) | 0x3c003c00);
+    dq[12] =  __hmul2(sign12.as_half2, qq12.as_half2);
+    half2_uint32 sign13 (((q_4 << 13) & 0xf800f800) | 0x3c003c00);
+    dq[13] =  __hmul2(sign13.as_half2, qq13.as_half2);
+    half2_uint32 sign14 (((q_4 << 14) & 0xf800f800) | 0x3c003c00);
+    dq[14] =  __hmul2(sign14.as_half2, qq14.as_half2);
+    half2_uint32 sign15 (((q_4 << 15) & 0xf800f800) | 0x3c003c00);
+    dq[15] =  __hmul2(sign15.as_half2, qq15.as_half2);
+    // for (int i = 0; i < 16; i++) {
+    //     half2_uint32 sign (((q_4 << 1) & 0xf800f800) | 0x3c003c00);
+    // }
 }
 
 #endif
